@@ -105,6 +105,12 @@ Then go to:
 
 ---
 
+### 6. Reminder
+
+* Remember to rename the login.html to index.html and vice versa because i exchange the names so i can deploy it on github pages.
+
+---
+
 ## 🌐 Deployment
 
 When ready to move online:
