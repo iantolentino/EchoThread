@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Modern Blog — Home</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="container">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="logo">BLG</div>
+        <div>
+          <h3 class="h1">Modern Blog</h3>
+          <div class="muted">A client-only demo</div>
+        </div>
+      </div>
+
+      <div id="userArea" class="userCard">
+        <!-- populated by JS -->
+      </div>
+
+      <div style="margin-top:12px">
+        <div class="small">Search posts by user ID</div>
+        <div class="searchBox" style="margin-top:8px">
+          <input id="searchUserId" placeholder="Enter user ID" />
+          <button id="searchBtn" class="btn">Search</button>
+        </div>
+        <div id="searchResult" class="small" style="margin-top:8px"></div>
+      </div>
+
+      <div style="margin-top:14px">
+        <div class="small">Quick links</div>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <a href="index.html" class="btn ghost">Home</a>
+          <a href="login.html" class="btn">Login</a>
+        </div>
+      </div>
+
+      <div class="footer">Data stored locally. Later we'll switch to MongoDB and a server.</div>
+    </aside>
+
+    <main class="main">
+      <div class="topbar">
+        <div>
+          <h2 style="margin:0">Latest posts</h2>
+          <div class="muted">Public posts are visible to everyone</div>
+        </div>
+        <div class="flex">
+          <div id="loggedInNotice" class="small"></div>
+          <button id="logoutBtn" class="btn ghost" style="display:none">Logout</button>
+        </div>
+      </div>
+
+      <div id="createSection" class="card" style="display:none">
+        <h3>Create new post</h3>
+        <form id="createForm" class="createForm">
+          <input id="postTitle" placeholder="Title" required />
+          <textarea id="postContent" placeholder="Write your post (Markdown styling not supported, plain text)."></textarea>
+          <div class="controls">
+            <button type="submit" class="btn">Publish</button>
+            <button id="clearDraft" type="button" class="btn ghost">Clear</button>
+          </div>
+        </form>
+      </div>
+
+      <div id="postsWrap" class="cards">
+        <!-- posts -->
+      </div>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    // page-specific
+    document.addEventListener('DOMContentLoaded', () => {
+      const curr = storage.getCurrentUser();
+      const userArea = document.getElementById('userArea');
+      const createSection = document.getElementById('createSection');
+      const logoutBtn = document.getElementById('logoutBtn');
+      const loggedInNotice = document.getElementById('loggedInNotice');
+
+      function renderUserCard(){
+        const user = storage.getCurrentUser();
+        if(user){
+          userArea.innerHTML = `
+            <div class="avatar">${(user.displayName||user.id||'U').slice(0,1).toUpperCase()}</div>
+            <div style="flex:1">
+              <div style="display:flex;align-items:center;gap:8px">
+                <div style="font-weight:800">${user.displayName||'User'}</div>
+                <div class="badge">${user.id}</div>
+              </div>
+              <div class="small muted" style="margin-top:6px">${user.email || ''}</div>
+            </div>
+          `;
+          createSection.style.display = 'block';
+          logoutBtn.style.display = 'inline-block';
+          loggedInNotice.textContent = `Signed in as ${user.displayName||user.id}`;
+        } else {
+          userArea.innerHTML = `<div style="display:block;"> <div style="font-weight:700">Visitor</div><div class="small muted">Log in to create posts, like and comment.</div></div>`;
+          createSection.style.display = 'none';
+          logoutBtn.style.display = 'none';
+          loggedInNotice.textContent = '';
+        }
+      }
+
+      renderUserCard();
+
+      logoutBtn.addEventListener('click', ()=>{
+        sessionStorage.removeItem('currentUser');
+        location.reload();
+      });
+
+      // create post
+      const createForm = document.getElementById('createForm');
+      createForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const title = document.getElementById('postTitle').value.trim();
+        const content = document.getElementById('postContent').value.trim();
+        if(!title || !content){ alert('Title and content required'); return;}
+        const res = storage.createPost({title, content});
+        if(res.success){
+          document.getElementById('postTitle').value = '';
+          document.getElementById('postContent').value = '';
+          renderPosts();
+        } else {
+          alert(res.message);
+        }
+      });
+
+      document.getElementById('clearDraft').addEventListener('click', ()=>{ document.getElementById('postTitle').value=''; document.getElementById('postContent').value=''; });
+
+      // search
+      document.getElementById('searchBtn').addEventListener('click', ()=>{
+        const q = document.getElementById('searchUserId').value.trim();
+        const el = document.getElementById('searchResult');
+        if(!q){ el.textContent = 'Enter a user ID to search.'; renderPosts(); return;}
+        const user = storage.getUserById(q);
+        if(!user){ el.innerHTML = `No user with that ID. Try a full ID. <span class="small muted"></span>`; return;}
+        el.innerHTML = `Found: <strong>${user.displayName||user.id}</strong> — showing their posts.`;
+        renderPosts(user.id);
+      });
+
+      // initial render
+      function renderPosts(filterUserId){
+        const postsWrap = document.getElementById('postsWrap');
+        const posts = storage.getAllPosts().sort((a,b)=>b.createdAt - a.createdAt);
+        postsWrap.innerHTML = '';
+        const list = filterUserId ? posts.filter(p=>p.authorId===filterUserId) : posts;
+        if(list.length===0){
+          postsWrap.innerHTML = `<div class="card center">No posts yet.</div>`; return;
+        }
+        list.forEach(p => {
+          const author = storage.getUserById(p.authorId) || {displayName:'Unknown', id:p.authorId};
+          const el = document.createElement('div');
+          el.className = 'card';
+          el.innerHTML = `
+            <h3><a href="post.html?id=${p.id}" class="link">${escapeHtml(p.title)}</a></h3>
+            <div class="meta">${author.displayName||author.id} · ${new Date(p.createdAt).toLocaleString()}</div>
+            <p>${escapeHtml(truncate(p.content, 160))}</p>
+            <div style="display:flex;gap:8px;margin-top:10px;align-items:center">
+              <div class="small">${p.likes.length} likes · ${p.comments.length} comments</div>
+              ${storage.isCurrentUserOwner(p) ? `<button data-id="${p.id}" class="iconBtn right editBtn">Edit</button><button data-id="${p.id}" class="iconBtn right delBtn">Delete</button>` : ''}
+              <a href="post.html?id=${p.id}" class="btn" style="margin-left:auto">Open</a>
+            </div>
+          `;
+          postsWrap.appendChild(el);
+        });
+
+        // attach edit/delete listeners
+        document.querySelectorAll('.editBtn').forEach(btn=>{
+          btn.addEventListener('click', (e)=>{
+            const id = e.target.dataset.id;
+            const post = storage.getPostById(id);
+            if(!post) return;
+            // open a quick edit modal using prompt (for demo)
+            const newTitle = prompt('Edit Title', post.title);
+            if(newTitle===null) return;
+            const newContent = prompt('Edit Content', post.content);
+            if(newContent===null) return;
+            storage.updatePost(id, {title:newTitle, content:newContent});
+            renderPosts();
+          });
+        });
+        document.querySelectorAll('.delBtn').forEach(btn=>{
+          btn.addEventListener('click', (e)=>{
+            const id = e.target.dataset.id;
+            if(confirm('Delete this post?')){ storage.deletePost(id); renderPosts(); }
+          });
+        });
+      }
+
+      function truncate(text, n){ return text.length>n ? text.slice(0,n)+'…' : text; }
+      function escapeHtml(s){ return s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'})[c]); }
+
+      renderPosts();
+    });
+  </script>
+</body>
+</html>

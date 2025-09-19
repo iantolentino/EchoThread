@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Blog — Login / Register</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div style="max-width:900px;margin:24px auto;">
+    <div style="display:flex;gap:20px;align-items:center;justify-content:space-between;">
+      <div class="brand">
+        <div class="logo">BLG</div>
+        <div>
+          <h2 class="h1">Modern Blog</h2>
+          <div class="muted">Build, share, and explore posts — client demo</div>
+        </div>
+      </div>
+      <div>
+        <a href="index.html" class="btn">Open Home</a>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 420px;gap:18px;margin-top:18px;">
+      <div class="card">
+        <h3>Welcome back</h3>
+        <p class="meta">Login to your account to create and manage posts. Your data is stored in your browser for this demo.</p>
+        <form id="loginForm" class="createForm" style="margin-top:8px">
+          <input id="loginId" placeholder="User ID (or username/email)" />
+          <input id="loginPassword" placeholder="Password" type="password" />
+          <div class="controls">
+            <button type="submit" class="btn">Login</button>
+            <button id="demoLoginBtn" type="button" class="btn ghost">Demo account</button>
+            <div class="right"><a href="#" id="toRegister" class="link">Don't have an account? Register</a></div>
+          </div>
+        </form>
+        <div id="loginFeedback" class="small" style="margin-top:8px"></div>
+      </div>
+
+      <div class="card">
+        <h3>Create account</h3>
+        <p class="meta">Register — we'll create a unique user ID for you (store it safely).</p>
+        <form id="registerForm" class="createForm">
+          <input id="regName" placeholder="Display name (optional)" />
+          <input id="regEmail" placeholder="Email (optional)" />
+          <input id="regPassword" placeholder="Password" type="password" />
+          <div class="controls">
+            <button type="submit" class="btn">Register</button>
+            <button id="genIdBtn" type="button" class="btn ghost">Generate ID now</button>
+          </div>
+        </form>
+        <div id="regFeedback" class="small" style="margin-top:8px"></div>
+      </div>
+    </div>
+
+    <div class="footer">This is a client-side demo. Passwords are hashed with per-user salt (SHA-256) and stored in browser storage. Not for production use.</div>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    // page-specific init
+    document.addEventListener('DOMContentLoaded', async () => {
+      const regForm = document.getElementById('registerForm');
+      const loginForm = document.getElementById('loginForm');
+      const loginFeedback = document.getElementById('loginFeedback');
+      const regFeedback = document.getElementById('regFeedback');
+
+      document.getElementById('genIdBtn').addEventListener('click',()=> {
+        const id = helpers.makeId(8);
+        regFeedback.textContent = `Suggested user id: ${id} — it will still be unique system id.`;
+      });
+
+      regForm.addEventListener('submit', async (e)=>{
+        e.preventDefault();
+        regFeedback.textContent = '';
+        const name = document.getElementById('regName').value.trim();
+        const email = document.getElementById('regEmail').value.trim();
+        const password = document.getElementById('regPassword').value;
+
+        if(!password || password.length < 4){
+          regFeedback.textContent = 'Choose a password (min 4 chars).';
+          return;
+        }
+        const created = await auth.register({displayName:name||null, email: email||null, password});
+        if(created.success){
+          regFeedback.textContent = `Account created. Your user ID: ${created.user.id}. Keep it safe.`;
+        } else {
+          regFeedback.textContent = created.message;
+        }
+      });
+
+      loginForm.addEventListener('submit', async (e)=>{
+        e.preventDefault();
+        loginFeedback.textContent = '';
+        const idInput = document.getElementById('loginId').value.trim();
+        const password = document.getElementById('loginPassword').value;
+        const res = await auth.login({idOrEmailOrName:idInput, password});
+        if(res.success){
+          sessionStorage.setItem('currentUser', res.user.id);
+          location.href = 'index.html';
+        } else {
+          loginFeedback.textContent = res.message;
+        }
+      });
+
+      document.getElementById('demoLoginBtn').addEventListener('click', async ()=>{
+        // create or reuse demo
+        let user = storage.getUserByEmail('demo@local');
+        if(!user){
+          const created = await auth.register({displayName:'Demo User', email:'demo@local', password:'demo123'});
+          user = created.user;
+        }
+        sessionStorage.setItem('currentUser', user.id);
+        location.href = 'index.html';
+      });
+
+      document.getElementById('toRegister').addEventListener('click', (e)=>{ e.preventDefault(); document.getElementById('regName').focus(); });
+    });
+  </script>
+</body>
+</html>

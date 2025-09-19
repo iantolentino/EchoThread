@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Modern Blog — Post</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div style="max-width:1000px;margin:20px auto;">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px;">
+      <div class="brand">
+        <div class="logo">BLG</div>
+        <div>
+          <h2 class="h1">Post</h2>
+          <div class="muted">Full post view</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <a href="index.html" class="btn ghost">Back</a>
+        <a href="login.html" class="btn">Login</a>
+      </div>
+    </div>
+
+    <div id="postArea" class="postWrap card">
+      <!-- populated -->
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', ()=> {
+      const postArea = document.getElementById('postArea');
+      const params = new URLSearchParams(location.search);
+      const id = params.get('id');
+      if(!id){ postArea.innerHTML = `<div class="center">Invalid post id.</div>`; return; }
+      const post = storage.getPostById(id);
+      if(!post){ postArea.innerHTML = `<div class="center">Post not found.</div>`; return; }
+
+      const author = storage.getUserById(post.authorId) || {displayName:'Unknown', id:post.authorId};
+      function render(){
+        postArea.innerHTML = `
+          <div style="display:flex;align-items:center;gap:12px;justify-content:space-between">
+            <div>
+              <h1>${escapeHtml(post.title)}</h1>
+              <div class="postMeta">${author.displayName||author.id} · ${new Date(post.createdAt).toLocaleString()}</div>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <div class="small">${post.likes.length} likes</div>
+              ${storage.isCurrentUserOwner(post) ? `<button id="editPostBtn" class="btn ghost">Edit</button><button id="delPostBtn" class="btn ghost">Delete</button>` : ''}
+              <button id="likeBtn" class="btn">${storage.isCurrentUserLiked(post) ? 'Unlike' : 'Like'}</button>
+            </div>
+          </div>
+          <div class="postBody" style="margin-top:14px">${escapeHtml(post.content)}</div>
+
+          <div style="margin-top:20px">
+            <h3>Comments</h3>
+            <div id="commentsWrap"></div>
+
+            <div style="margin-top:12px" id="commentFormWrap">
+              <textarea id="commentText" placeholder="Add a comment..." style="width:100%;min-height:80px;border-radius:10px;padding:10px"></textarea>
+              <div style="display:flex;gap:8px;margin-top:8px">
+                <button id="postCommentBtn" class="btn">Post comment</button>
+              </div>
+              <div id="commentFeedback" class="small" style="margin-top:8px"></div>
+            </div>
+          </div>
+        `;
+
+        // comments
+        const cw = document.getElementById('commentsWrap');
+        cw.innerHTML = '';
+        post.comments.sort((a,b)=>a.createdAt-b.createdAt).forEach(c=>{
+          const user = storage.getUserById(c.authorId) || {displayName:'Unknown'};
+          const d = document.createElement('div');
+          d.className = 'comment';
+          d.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center">
+            <div><div class="who">${user.displayName||user.id}</div><div class="small muted">${new Date(c.createdAt).toLocaleString()}</div></div>
+            ${storage.getCurrentUser() && storage.getCurrentUser().id===c.authorId ? `<button data-id="${c.id}" class="iconBtn delCommentBtn">Delete</button>` : ''}
+          </div>
+          <div style="margin-top:8px">${escapeHtml(c.text)}</div>`;
+          cw.appendChild(d);
+        });
+
+        // attach events
+        document.getElementById('likeBtn').addEventListener('click', ()=>{
+          if(!storage.getCurrentUser()){ alert('Login to like'); location.href='login.html'; return; }
+          if(storage.isCurrentUserLiked(post)) storage.unlikePost(post.id);
+          else storage.likePost(post.id);
+          const newPost = storage.getPostById(post.id);
+          post.likes = newPost.likes;
+          render();
+        });
+
+        const editBtn = document.getElementById('editPostBtn');
+        if(editBtn){
+          editBtn.addEventListener('click', ()=>{
+            const newTitle = prompt('Edit title', post.title);
+            if(newTitle===null) return;
+            const newContent = prompt('Edit content', post.content);
+            if(newContent===null) return;
+            storage.updatePost(post.id, {title:newTitle, content:newContent});
+            Object.assign(post, storage.getPostById(post.id));
+            render();
+          });
+        }
+        const delBtn = document.getElementById('delPostBtn');
+        if(delBtn){
+          delBtn.addEventListener('click', ()=>{
+            if(confirm('Delete post?')){ storage.deletePost(post.id); location.href='index.html'; }
+          });
+        }
+
+        document.getElementById('postCommentBtn').addEventListener('click', ()=>{
+          if(!storage.getCurrentUser()){ alert('Login to comment'); location.href='login.html'; return; }
+          const text = document.getElementById('commentText').value.trim();
+          if(!text){ document.getElementById('commentFeedback').textContent='Write a comment.'; return; }
+          storage.addComment(post.id, text);
+          document.getElementById('commentText').value='';
+          Object.assign(post, storage.getPostById(post.id));
+          render();
+        });
+
+        document.querySelectorAll('.delCommentBtn').forEach(btn=>{
+          btn.addEventListener('click', (e)=>{
+            const cid = e.target.dataset.id;
+            if(confirm('Delete comment?')){ storage.deleteComment(post.id, cid); Object.assign(post, storage.getPostById(post.id)); render(); }
+          });
+        });
+      }
+
+      function escapeHtml(s){ return s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'})[c]); }
+      render();
+    });
+  </script>
+</body>
+</html>
